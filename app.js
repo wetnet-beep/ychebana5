@@ -247,7 +247,7 @@ function initializeNavigation() {
     });
 }
 
-// ==================== РЕШАЛКА УРАВНЕНИЙ ====================
+// ==================== РЕШАЛКА УРАВНЕНИЙ (ИСПРАВЛЕННАЯ) ====================
 
 function initializeSolver() {
     elements.solveBtn.addEventListener('click', solveEquation);
@@ -326,8 +326,10 @@ function parseEquation(equation) {
     return parts;
 }
 
+// ИСПРАВЛЕННАЯ ФУНКЦИЯ showSolutionSteps
 function showSolutionSteps(parsed) {
     let stepsHTML = '';
+    const eq = parsed.normalized;
     
     // Шаг 1: Исходное уравнение
     stepsHTML += `
@@ -341,24 +343,51 @@ function showSolutionSteps(parsed) {
     stepsHTML += `
         <div class="step">
             <strong>Шаг 2: Нормализация</strong><br>
-            ${parsed.normalized}
+            ${eq}
         </div>
     `;
     
-    // Шаг 3: Переносим константы
-    if (parsed.normalized.includes('=')) {
-        stepsHTML += `
-            <div class="step">
-                <strong>Шаг 3: Перенос констант вправо</strong><br>
-                ${parsed.normalized.replace(/([+\-]?\d+)(?=[^=]*=)/g, match => {
-                    const num = parseInt(match);
-                    return num >= 0 ? `-${num}` : `+${Math.abs(num)}`;
-                })}
-            </div>
-        `;
+    // Шаг 3: ПРАВИЛЬНЫЙ перенос констант
+    if (eq.includes('=')) {
+        const sides = eq.split('=');
+        let left = sides[0];
+        let right = sides[1];
+        
+        // Находим все числа без переменных слева
+        const leftTerms = left.match(/([+-]?\d+(?![\w]))/g) || [];
+        
+        if (leftTerms.length > 0) {
+            let newLeft = left;
+            let newRight = right;
+            
+            for (const term of leftTerms) {
+                const num = term.replace(/[+-]/g, '');
+                const sign = term.startsWith('-') ? '+' : '-';
+                
+                // Убираем этот терм слева
+                newLeft = newLeft.replace(term, '');
+                // Добавляем с противоположным знаком справа
+                if (newRight === '0' || newRight === '') {
+                    newRight = sign + num;
+                } else {
+                    newRight = `(${newRight})${sign}${num}`;
+                }
+            }
+            
+            // Упрощаем
+            newLeft = newLeft.replace(/^\+/, '').replace(/\+\+/g, '+').replace(/\+\-/g, '-').replace(/--/g, '+');
+            if (newLeft === '') newLeft = '0';
+            
+            stepsHTML += `
+                <div class="step">
+                    <strong>Шаг 3: Перенос констант вправо</strong><br>
+                    ${newLeft} = ${newRight}
+                </div>
+            `;
+        }
     }
     
-    // Шаг 4: Группируем переменные
+    // Шаг 4: Объединяем одинаковые переменные
     if (parsed.variables.length > 0) {
         stepsHTML += `
             <div class="step">
@@ -373,68 +402,145 @@ function showSolutionSteps(parsed) {
 
 function solveMathEquation(equation) {
     try {
-        // Используем math.js для решения
-        const eq = equation.replace(/=/g, '===');
+        // Упрощаем уравнение
+        const eq = equation.replace(/\s/g, '').toLowerCase();
         
-        // Создаем парсер math.js
-        const parser = math.parser();
+        // Проверяем простое линейное уравнение типа ax + b = c
+        const simpleMatch = eq.match(/^([+-]?\d*)([a-z])([+-]\d+)=([+-]?\d+)$/i);
         
-        // Пробуем решить алгебраически
-        const solutions = {};
-        
-        // Извлекаем переменные
-        const vars = equation.match(/[a-z]/gi) || [];
-        const uniqueVars = [...new Set(vars.map(v => v.toLowerCase()))];
-        
-        // Для простых линейных уравнений
-        if (uniqueVars.length === 1) {
-            const varName = uniqueVars[0];
+        if (simpleMatch) {
+            const [, aStr, variable, bStr, cStr] = simpleMatch;
+            const a = aStr === '' || aStr === '+' ? 1 : aStr === '-' ? -1 : parseInt(aStr);
+            const b = parseInt(bStr);
+            const c = parseInt(cStr);
             
-            // Заменяем переменную на x для math.js
-            const normalizedEq = equation.replace(new RegExp(varName, 'gi'), 'x');
+            // Решение: x = (c - b) / a
+            const solution = (c - b) / a;
             
-            try {
-                const parsed = math.parse(normalizedEq);
-                const solved = math.solve(parsed, 'x');
+            return {
+                equation: equation,
+                variables: [variable],
+                solutions: { [variable]: solution },
+                method: 'linear',
+                timestamp: new Date().toISOString()
+            };
+        }
+        
+        // Для уравнений типа 10x+7x+100=17100
+        const multiMatch = eq.match(/(.*)=(\d+)$/);
+        if (multiMatch) {
+            const left = multiMatch[1];
+            const right = parseInt(multiMatch[2]);
+            
+            // Находим все коэффициенты при x
+            const xTerms = left.match(/([+-]?\d*)[a-z]/gi) || [];
+            const constTerms = left.match(/([+-]?\d+)(?![a-z])/g) || [];
+            
+            let totalX = 0;
+            let totalConst = 0;
+            
+            // Суммируем коэффициенты при x
+            xTerms.forEach(term => {
+                const coef = term.replace(/[a-z]/gi, '');
+                const value = coef === '' || coef === '+' ? 1 : 
+                             coef === '-' ? -1 : parseInt(coef);
+                totalX += value;
+            });
+            
+            // Суммируем константы
+            constTerms.forEach(term => {
+                totalConst += parseInt(term);
+            });
+            
+            // Решение: x = (right - totalConst) / totalX
+            if (totalX !== 0) {
+                const solution = (right - totalConst) / totalX;
+                const variable = eq.match(/[a-z]/i)[0];
                 
-                if (Array.isArray(solved)) {
-                    solutions[varName] = solved.map(v => math.round(v, 4));
-                } else {
-                    solutions[varName] = math.round(solved, 4);
-                }
-            } catch (e) {
-                // Если math.js не справился, используем численное решение
-                solutions[varName] = solveNumerically(equation, varName);
+                return {
+                    equation: equation,
+                    variables: [variable],
+                    solutions: { [variable]: solution },
+                    method: 'combine_like_terms',
+                    timestamp: new Date().toISOString(),
+                    steps: {
+                        totalX: totalX,
+                        totalConst: totalConst,
+                        right: right
+                    }
+                };
             }
         }
         
+        // Пробуем math.js для сложных уравнений
+        if (typeof math !== 'undefined') {
+            try {
+                const parser = math.parser();
+                const expr = eq.replace(/=/g, '-(') + ')';
+                const parsed = math.parse(expr);
+                
+                // Ищем переменную
+                const vars = eq.match(/[a-z]/gi) || [];
+                const variable = vars[0];
+                
+                if (variable) {
+                    // Численное решение
+                    for (let x = -1000; x <= 1000; x += 0.01) {
+                        try {
+                            const scope = { [variable]: x };
+                            const result = parsed.evaluate(scope);
+                            if (Math.abs(result) < 0.0001) {
+                                return {
+                                    equation: equation,
+                                    variables: [variable],
+                                    solutions: { [variable]: Math.round(x * 100) / 100 },
+                                    method: 'numerical',
+                                    timestamp: new Date().toISOString()
+                                };
+                            }
+                        } catch (e) {
+                            continue;
+                        }
+                    }
+                }
+            } catch (mathError) {
+                console.log('Math.js не смог решить:', mathError);
+            }
+        }
+        
+        // Простой численный метод
         return {
             equation: equation,
-            variables: uniqueVars,
-            solutions: solutions,
+            solution: solveNumerically(eq),
+            method: 'simple_numerical',
             timestamp: new Date().toISOString()
         };
         
     } catch (error) {
-        // Простой численный метод для демонстрации
+        console.error('Ошибка решения:', error);
         return {
             equation: equation,
-            solution: solveNumerically(equation, 'x'),
-            method: 'numerical',
-            timestamp: new Date().toISOString()
+            error: error.message,
+            solution: "Не удалось решить уравнение"
         };
     }
 }
 
-function solveNumerically(equation, variable) {
-    // Простой численный метод для демонстрации
-    const eq = equation.replace(/=/g, '-(');
+function solveNumerically(equation) {
+    const eq = equation.replace(/\s/g, '').toLowerCase();
     
-    // Пробуем значения от -100 до 100
-    for (let x = -100; x <= 100; x += 0.1) {
+    // Пробуем найти переменную
+    const variableMatch = eq.match(/[a-z]/i);
+    if (!variableMatch) return "Нет переменной";
+    
+    const variable = variableMatch[0];
+    const expr = eq.replace(/=/g, '-(') + ')';
+    
+    // Пробуем значения от -1000 до 1000
+    for (let x = -1000; x <= 1000; x += 0.1) {
         try {
-            const testEq = eq.replace(new RegExp(variable, 'gi'), x.toString());
-            const result = eval(testEq + ')');
+            const testExpr = expr.replace(new RegExp(variable, 'gi'), x.toString());
+            const result = eval(testExpr);
             
             if (Math.abs(result) < 0.001) {
                 return Math.round(x * 100) / 100;
@@ -444,26 +550,47 @@ function solveNumerically(equation, variable) {
         }
     }
     
-    return "Не удалось найти точное решение";
+    return "Не удалось найти решение";
 }
 
 function showSolutionResult(solution) {
     let resultHTML = '';
     
-    if (solution.solutions) {
+    if (solution.error) {
+        resultHTML = `<div class="error">Ошибка: ${solution.error}</div>`;
+    } else if (solution.solutions) {
         resultHTML += `<div class="solution">`;
         
         for (const [variable, value] of Object.entries(solution.solutions)) {
             if (Array.isArray(value)) {
                 resultHTML += `<p><strong>${variable}:</strong> ${value.join(', ')}</p>`;
             } else {
-                resultHTML += `<p><strong>${variable} = ${value}</strong></p>`;
+                // Округляем до 2 знаков
+                const rounded = Math.round(value * 100) / 100;
+                resultHTML += `<h3><strong>${variable} = ${rounded}</strong></h3>`;
+                
+                // Проверка
+                if (typeof value === 'number') {
+                    const eq = elements.equationInput.value.toLowerCase().replace(/\s/g, '');
+                    const testEq = eq.replace(new RegExp(variable, 'g'), rounded.toString());
+                    try {
+                        const sides = testEq.split('=');
+                        if (sides.length === 2) {
+                            const left = eval(sides[0]);
+                            const right = eval(sides[1]);
+                            const diff = Math.abs(left - right);
+                            resultHTML += `<p class="small"><em>Проверка: ${left} ≈ ${right} (разница: ${diff.toFixed(4)})</em></p>`;
+                        }
+                    } catch (e) {
+                        // Игнорируем ошибки проверки
+                    }
+                }
             }
         }
         
         resultHTML += `</div>`;
     } else if (solution.solution) {
-        resultHTML += `<div class="solution"><strong>Ответ: ${solution.solution}</strong></div>`;
+        resultHTML += `<div class="solution"><h3><strong>Ответ: ${solution.solution}</strong></h3></div>`;
     }
     
     resultHTML += `<p class="small"><em>Решено: ${new Date(solution.timestamp).toLocaleTimeString()}</em></p>`;
@@ -478,11 +605,32 @@ function showBasicSolution(equation) {
             <i class="fas fa-lock"></i>
             <h4>Полное решение заблокировано</h4>
             <p>Активируйте ключ для просмотра всех шагов решения</p>
-            <button class="btn btn-primary" onclick="document.querySelector('[href=\"#key\"]').click()">
+            <button class="btn btn-primary" onclick="document.querySelector('[href=\\'#key\\']').click()">
                 <i class="fas fa-key"></i> Активировать ключ
             </button>
         </div>
     `;
+    
+    // Но всё равно пытаемся решить и показать только ответ
+    try {
+        const solution = solveMathEquation(equation);
+        if (solution.solutions) {
+            for (const [variable, value] of Object.entries(solution.solutions)) {
+                if (typeof value === 'number') {
+                    const rounded = Math.round(value * 100) / 100;
+                    elements.resultContainer.innerHTML += `
+                        <div class="basic-answer">
+                            <p><strong>Ответ: ${variable} ≈ ${rounded}</strong></p>
+                            <p class="small"><em>Активируйте ключ для подробных шагов</em></p>
+                        </div>
+                    `;
+                    break;
+                }
+            }
+        }
+    } catch (e) {
+        // Игнорируем ошибки для бесплатных пользователей
+    }
 }
 
 // ==================== МАТЕМАТИКА В СТОЛБИК ====================
@@ -657,18 +805,6 @@ function initializePhotoUpload() {
     
     elements.uploadArea.addEventListener('dragleave', () => {
         elements.uploadArea.style.borderColor = '';
-        elements.photoUpload.click();
-    });
-    
-    // Drag and drop область
-    elements.uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        elements.uploadArea.style.borderColor = 'var(--primary-color)';
-        elements.uploadArea.style.backgroundColor = 'var(--hover-bg)';
-    });
-    
-    elements.uploadArea.addEventListener('dragleave', () => {
-        elements.uploadArea.style.borderColor = '';
         elements.uploadArea.style.backgroundColor = '';
     });
     
@@ -770,58 +906,6 @@ function renderGallery() {
     elements.gallery.innerHTML = galleryHTML;
 }
 
-function viewPhoto(photoId) {
-    const photo = uploadedPhotos.find(p => p.id === photoId);
-    if (!photo) return;
-    
-    const modal = document.createElement('div');
-    modal.className = 'photo-modal';
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.9);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2000;
-    `;
-    
-    modal.innerHTML = `
-        <div style="position: relative; max-width: 90%; max-height: 90%;">
-            <img src="${photo.data}" 
-                 alt="${photo.name}" 
-                 style="max-width: 100%; max-height: 90vh;">
-            <button onclick="this.parentElement.parentElement.remove()" 
-                    style="position: absolute; top: -40px; right: 0; 
-                           background: none; border: none; color: white; 
-                           font-size: 30px; cursor: pointer;">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Закрытие по клику на фон
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.remove();
-        }
-    });
-}
-
-function deletePhoto(photoId) {
-    if (!confirm('Удалить это фото?')) return;
-    
-    uploadedPhotos = uploadedPhotos.filter(p => p.id !== photoId);
-    savePhotosToStorage();
-    renderGallery();
-    showNotification('Фото удалено!', 'success');
-}
-
 // ==================== СИСТЕМА КЛЮЧЕЙ ====================
 
 function initializeKeySystem() {
@@ -834,7 +918,7 @@ function initializeKeySystem() {
     });
 }
 
-// Массив валидных ключей (в реальном приложении это должно быть на сервере)
+// Массив валидных ключей (40 штук)
 const VALID_KEYS = [
     'UCH-NA5-SUN-723', 'UCH-NA5-MOON-841', 'UCH-NA5-STAR-309',
     'UCH-NA5-BOOK-456', 'UCH-NA5-PEN-182', 'UCH-NA5-DESK-574',
@@ -852,7 +936,7 @@ const VALID_KEYS = [
     'UCH-NA5-ROAD-349'
 ];
 
-// Использованные ключи (в реальном приложении должно быть на сервере)
+// Использованные ключи
 const usedKeys = JSON.parse(localStorage.getItem('used_keys') || '[]');
 
 async function activateKey() {
@@ -881,9 +965,6 @@ async function activateKey() {
         showNotification('Этот ключ уже был активирован!', 'warning');
         return;
     }
-    
-    // В реальном приложении здесь должен быть запрос к серверу
-    // Для демонстрации делаем локальную проверку
     
     try {
         // Симулируем проверку на сервере
@@ -928,9 +1009,6 @@ async function activateKey() {
 }
 
 async function simulateServerActivation(key) {
-    // В реальном приложении здесь должен быть fetch запрос к серверу
-    // Для демонстрации симулируем ответ сервера
-    
     return new Promise((resolve) => {
         setTimeout(() => {
             // Создаем дату окончания (10 дней от текущей даты)
@@ -945,7 +1023,7 @@ async function simulateServerActivation(key) {
                 deviceId: currentUser.deviceId,
                 message: 'Ключ активирован успешно'
             });
-        }, 1000); // Имитация задержки сети
+        }, 1000);
     });
 }
 
@@ -969,18 +1047,12 @@ function activatePremiumFeatures(isActive) {
         // Показываем таймер
         elements.keyTimer.style.display = 'block';
         
-        // Разблокируем премиум функции
-        unlockPremiumFeatures();
-        
     } else {
         elements.keyStatus.className = 'key-status inactive';
         elements.keyStatus.innerHTML = '<i class="fas fa-key"></i> <span>Ключ не активирован</span>';
         
         // Скрываем таймер
         elements.keyTimer.style.display = 'none';
-        
-        // Блокируем премиум функции
-        lockPremiumFeatures();
     }
 }
 
@@ -1008,24 +1080,14 @@ function updateKeyTimer() {
     // Обновляем дату окончания
     elements.expiryDate.textContent = `Дата окончания: ${keyExpiry.toLocaleDateString('ru-RU')}`;
     
-    // Меняем цвет прогресс-бара в зависимости от оставшегося времени
+    // Меняем цвет прогресс-бара
     if (daysLeft <= 3) {
-        elements.progressFill.style.backgroundColor = '#f44336'; // Красный
+        elements.progressFill.style.backgroundColor = '#f44336';
     } else if (daysLeft <= 7) {
-        elements.progressFill.style.backgroundColor = '#ff9800'; // Оранжевый
+        elements.progressFill.style.backgroundColor = '#ff9800';
     } else {
-        elements.progressFill.style.backgroundColor = '#4caf50'; // Зеленый
+        elements.progressFill.style.backgroundColor = '#4caf50';
     }
-}
-
-function unlockPremiumFeatures() {
-    // В реальном приложении здесь разблокируются все премиум функции
-    console.log('Премиум функции разблокированы!');
-}
-
-function lockPremiumFeatures() {
-    // Блокируем премиум функции
-    console.log('Премиум функции заблокированы');
 }
 
 // ==================== PWA И OFFLINE ====================
@@ -1037,7 +1099,6 @@ function checkOnlineStatus() {
         showNotification('Работаем в оффлайн режиме', 'info');
     }
     
-    // Слушаем изменения онлайн статуса
     window.addEventListener('online', () => {
         isOffline = false;
         showNotification('Соединение восстановлено', 'success');
@@ -1052,18 +1113,8 @@ function checkOnlineStatus() {
 async function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         try {
-            const registration = await navigatorServiceWorker.register('/sw.js', {
-                scope: '/'
-            });
-            
-            console.log('Service Worker зарегистрирован:', registration);
-            
-            // Проверяем обновления
-            registration.addEventListener('updatefound', () => {
-                const newWorker = registration.installing;
-                console.log('Обновление Service Worker:', newWorker);
-            });
-            
+            await navigator.serviceWorker.register('/sw.js');
+            console.log('Service Worker зарегистрирован');
         } catch (error) {
             console.error('Ошибка регистрации Service Worker:', error);
         }
@@ -1075,10 +1126,8 @@ async function registerServiceWorker() {
 function showNotification(message, type = 'info') {
     const notification = elements.notification;
     
-    // Устанавливаем сообщение
     notification.textContent = message;
     
-    // Устанавливаем цвет в зависимости от типа
     const colors = {
         success: '#4caf50',
         error: '#f44336',
@@ -1087,19 +1136,64 @@ function showNotification(message, type = 'info') {
     };
     
     notification.style.backgroundColor = colors[type] || colors.info;
-    
-    // Показываем уведомление
     notification.style.display = 'block';
     
-    // Автоматически скрываем через 5 секунд
     setTimeout(() => {
         notification.style.display = 'none';
     }, 5000);
 }
 
-// Экспортируем функции для использования в HTML
-window.viewPhoto = viewPhoto;
-window.deletePhoto = deletePhoto;
+// Экспортируем функции
+window.viewPhoto = function(photoId) {
+    const photo = uploadedPhotos.find(p => p.id === photoId);
+    if (!photo) return;
+    
+    const modal = document.createElement('div');
+    modal.className = 'photo-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+    `;
+    
+    modal.innerHTML = `
+        <div style="position: relative; max-width: 90%; max-height: 90%;">
+            <img src="${photo.data}" 
+                 alt="${photo.name}" 
+                 style="max-width: 100%; max-height: 90vh;">
+            <button onclick="this.parentElement.parentElement.remove()" 
+                    style="position: absolute; top: -40px; right: 0; 
+                           background: none; border: none; color: white; 
+                           font-size: 30px; cursor: pointer;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+};
+
+window.deletePhoto = function(photoId) {
+    if (!confirm('Удалить это фото?')) return;
+    
+    uploadedPhotos = uploadedPhotos.filter(p => p.id !== photoId);
+    savePhotosToStorage();
+    renderGallery();
+    showNotification('Фото удалено!', 'success');
+};
 
 // Обновляем таймер каждую минуту
 setInterval(() => {
@@ -1111,4 +1205,4 @@ setInterval(() => {
 // Обновляем таймер при загрузке
 if (isPremiumUser()) {
     updateKeyTimer();
-                  }
+}
