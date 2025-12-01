@@ -1106,14 +1106,15 @@ function checkOnlineStatus() {
 async function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         try {
+            // ИЗМЕНИТЕ ЭТУ СТРОКУ:
             await navigator.serviceWorker.register('/sw.js');
             console.log('Service Worker зарегистрирован');
         } catch (error) {
             console.error('Ошибка регистрации Service Worker:', error);
+            // Просто игнорируем ошибку для GitHub Pages
         }
     }
 }
-
 // ==================== УТИЛИТЫ ====================
 
 function showNotification(message, type = 'info') {
