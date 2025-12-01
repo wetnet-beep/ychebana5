@@ -633,7 +633,7 @@ function showBasicSolution(equation) {
     }
 }
 
-// ==================== МАТЕМАТИКА В СТОЛБИК ====================
+// ==================== МАТЕМАТИКА В СТОЛБИК (ИСПРАВЛЕННАЯ) ====================
 
 function initializeColumnMath() {
     // Переключение операций
@@ -650,17 +650,22 @@ function initializeColumnMath() {
 }
 
 function calculateColumn() {
-    const num1 = elements.num1.value;
-    const num2 = elements.num2.value;
-    const operation = elements.opDisplay.textContent;
+    const num1 = document.getElementById('num1').value;
+    const num2 = document.getElementById('num2').value;
+    const operation = document.getElementById('opDisplay').textContent;
     
     if (!num1 || !num2) {
         showNotification('Введите оба числа!', 'error');
         return;
     }
     
-    const a = parseInt(num1);
-    const b = parseInt(num2);
+    const a = parseFloat(num1);
+    const b = parseFloat(num2);
+    
+    if (isNaN(a) || isNaN(b)) {
+        showNotification('Введите корректные числа!', 'error');
+        return;
+    }
     
     let result = '';
     
@@ -671,15 +676,22 @@ function calculateColumn() {
         case '-':
             result = subtractColumn(a, b);
             break;
-        case '*':
+        case '×':  // ВАЖНО: это знак умножения, не звездочка!
             result = multiplyColumn(a, b);
             break;
         case '/':
-            result = divideColumn(a, b);
+            if (b === 0) {
+                result = 'Ошибка: деление на ноль!';
+            } else {
+                result = divideColumn(a, b);
+            }
             break;
+        default:
+            result = 'Неизвестная операция';
     }
     
     elements.columnResult.textContent = result;
+    elements.columnResult.style.display = 'block';
 }
 
 function addColumn(a, b) {
@@ -691,18 +703,10 @@ function addColumn(a, b) {
     const maxLength = Math.max(aStr.length, bStr.length, sumStr.length);
     
     let result = '';
-    
-    // Первое число
     result += ' '.repeat(maxLength - aStr.length + 2) + aStr + '\n';
-    
-    // Знак плюс и второе число
     result += '+ ' + ' '.repeat(maxLength - bStr.length + 1) + bStr + '\n';
-    
-    // Черта
     result += '—'.repeat(maxLength + 3) + '\n';
-    
-    // Результат
-    result += ' '.repeat(maxLength - sumStr.length + 2) + sumStr + '\n';
+    result += ' '.repeat(maxLength - sumStr.length + 2) + sumStr;
     
     return result;
 }
@@ -716,18 +720,10 @@ function subtractColumn(a, b) {
     const maxLength = Math.max(aStr.length, bStr.length, diffStr.length);
     
     let result = '';
-    
-    // Первое число
     result += ' '.repeat(maxLength - aStr.length + 2) + aStr + '\n';
-    
-    // Знак минус и второе число
     result += '- ' + ' '.repeat(maxLength - bStr.length + 1) + bStr + '\n';
-    
-    // Черта
     result += '—'.repeat(maxLength + 3) + '\n';
-    
-    // Результат
-    result += ' '.repeat(maxLength - diffStr.length + 2) + diffStr + '\n';
+    result += ' '.repeat(maxLength - diffStr.length + 2) + diffStr;
     
     return result;
 }
@@ -741,53 +737,50 @@ function multiplyColumn(a, b) {
     const maxLength = Math.max(aStr.length, bStr.length, productStr.length);
     
     let result = '';
-    
-    // Первое число
     result += ' '.repeat(maxLength - aStr.length + 2) + aStr + '\n';
-    
-    // Знак умножения и второе число
     result += '× ' + ' '.repeat(maxLength - bStr.length + 1) + bStr + '\n';
-    
-    // Черта
     result += '—'.repeat(maxLength + 3) + '\n';
     
-    // Умножение по шагам
-    const bDigits = bStr.split('').reverse();
-    
-    bDigits.forEach((digit, index) => {
-        const partial = a * parseInt(digit);
-        const partialStr = partial.toString();
-        const indent = ' '.repeat(index);
+    // Если умножаем на многозначное число
+    if (b > 9 || b < -9) {
+        const bDigits = Math.abs(b).toString().split('').reverse();
+        let partialResults = [];
         
-        result += indent + ' '.repeat(maxLength - partialStr.length + 2) + partialStr + '\n';
-    });
-    
-    // Если было умножение на многозначное число
-    if (b > 9) {
+        bDigits.forEach((digit, index) => {
+            const partial = a * parseInt(digit);
+            const partialStr = partial.toString();
+            const indent = ' '.repeat(index);
+            partialResults.push(indent + ' '.repeat(maxLength - partialStr.length + 2) + partialStr);
+        });
+        
+        result += partialResults.join('\n') + '\n';
         result += '—'.repeat(maxLength + 3) + '\n';
-        result += ' '.repeat(maxLength - productStr.length + 2) + productStr + '\n';
+        result += ' '.repeat(maxLength - productStr.length + 2) + productStr;
+    } else {
+        // Для однозначного числа сразу результат
+        result += ' '.repeat(maxLength - productStr.length + 2) + productStr;
     }
     
     return result;
 }
 
 function divideColumn(a, b) {
-    if (b === 0) {
-        return 'Ошибка: деление на ноль!';
-    }
+    if (b === 0) return 'Ошибка: деление на ноль!';
     
     const quotient = Math.floor(a / b);
     const remainder = a % b;
     
     let result = '';
     result += `   ${a} ÷ ${b}\n`;
-    result += '—'.repeat(10) + '\n';
+    result += '—'.repeat(Math.max(a.toString().length, b.toString().length) + 4) + '\n';
     result += `   Частное: ${quotient}\n`;
-    result += `   Остаток: ${remainder}\n`;
+    
+    if (remainder !== 0) {
+        result += `   Остаток: ${remainder}`;
+    }
     
     return result;
 }
-
 // ==================== ФОТО И ПАМЯТКИ ====================
 
 function initializePhotoUpload() {
