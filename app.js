@@ -1142,3 +1142,275 @@ setInterval(() => {
 if (isPremiumUser()) {
     updateKeyTimer();
 }
+// ==================== СТАТИСТИКА САЙТА ====================
+
+// Записываем посещение
+function recordVisit() {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const visitorId = localStorage.getItem('visitorId');
+    
+    // Создаем новый ID если первый раз
+    if (!visitorId) {
+        const newId = 'visitor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('visitorId', newId);
+        
+        // Увеличиваем счетчик уникальных
+        let uniqueCount = parseInt(localStorage.getItem('uniqueVisitors') || '0');
+        uniqueCount++;
+        localStorage.setItem('uniqueVisitors', uniqueCount.toString());
+    }
+    
+    // Увеличиваем общий счетчик
+    let totalCount = parseInt(localStorage.getItem('totalVisits') || '0');
+    totalCount++;
+    localStorage.setItem('totalVisits', totalCount.toString());
+    
+    // Записываем посещение за сегодня
+    let todayStats = JSON.parse(localStorage.getItem('todayStats') || '{}');
+    if (!todayStats.date || todayStats.date !== today) {
+        // Новый день
+        todayStats = { date: today, count: 1 };
+    } else {
+        todayStats.count++;
+    }
+    localStorage.setItem('todayStats', JSON.stringify(todayStats));
+    
+    // Сохраняем детали посещения
+    const visit = {
+        id: visitorId || localStorage.getItem('visitorId'),
+        timestamp: new Date().toISOString(),
+        page: window.location.href
+    };
+    
+    let visitHistory = JSON.parse(localStorage.getItem('visitHistory') || '[]');
+    visitHistory.push(visit);
+    // Храним только последние 100 посещений
+    if (visitHistory.length > 100) {
+        visitHistory = visitHistory.slice(-100);
+    }
+    localStorage.setItem('visitHistory', JSON.stringify(visitHistory));
+    
+    console.log('📊 Посещение записано:', {
+        уникальные: localStorage.getItem('uniqueVisitors'),
+        всего: totalCount,
+        сегодня: todayStats.count
+    });
+}
+
+// Показать статистику в углу экрана
+function showVisitorCounter() {
+    const uniqueVisitors = localStorage.getItem('uniqueVisitors') || '0';
+    const totalVisits = localStorage.getItem('totalVisits') || '0';
+    const todayStats = JSON.parse(localStorage.getItem('todayStats') || '{"count":0}');
+    
+    // Создаем элемент счетчика
+    const counter = document.createElement('div');
+    counter.id = 'visitorCounter';
+    counter.style.cssText = `
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        z-index: 9999;
+        backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+    `;
+    
+    counter.innerHTML = `
+        <i class="fas fa-users"></i>
+        <span>${uniqueVisitors} уникальных</span>
+        <span style="opacity:0.7;">|</span>
+        <span>${totalVisits} всего</span>
+    `;
+    
+    // При клике показываем подробности
+    counter.addEventListener('click', showDetailedStats);
+    
+    document.body.appendChild(counter);
+    
+    // Анимация появления
+    setTimeout(() => {
+        counter.style.opacity = '1';
+    }, 1000);
+}
+
+// Показать подробную статистику
+function showDetailedStats() {
+    const uniqueVisitors = localStorage.getItem('uniqueVisitors') || '0';
+    const totalVisits = localStorage.getItem('totalVisits') || '0';
+    const todayStats = JSON.parse(localStorage.getItem('todayStats') || '{"count":0,"date":""}');
+    const usedKeys = JSON.parse(localStorage.getItem('usedKeys') || '[]');
+    
+    // Создаем модальное окно
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        backdrop-filter: blur(5px);
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #333;">
+                    <i class="fas fa-chart-bar"></i> Статистика сайта
+                </h3>
+                <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                        style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">
+                    ×
+                </button>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px;">
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 28px; font-weight: bold; color: #2196f3;">${uniqueVisitors}</div>
+                    <div style="font-size: 12px; color: #666;">Уникальных посетителей</div>
+                </div>
+                
+                <div style="background: #e8f5e9; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 28px; font-weight: bold; color: #4caf50;">${totalVisits}</div>
+                    <div style="font-size: 12px; color: #666;">Всего посещений</div>
+                </div>
+                
+                <div style="background: #fff3e0; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 28px; font-weight: bold; color: #ff9800;">${todayStats.count}</div>
+                    <div style="font-size: 12px; color: #666;">Посещений сегодня</div>
+                </div>
+                
+                <div style="background: #f3e5f5; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 28px; font-weight: bold; color: #9c27b0;">${usedKeys.length}</div>
+                    <div style="font-size: 12px; color: #666;">Активированных ключей</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                <h4 style="margin-bottom: 10px; color: #555;">
+                    <i class="fas fa-history"></i> История посещений
+                </h4>
+                <div style="max-height: 200px; overflow-y: auto; font-size: 12px;">
+                    ${getVisitHistoryHTML()}
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; text-align: center;">
+                <button onclick="exportStats()" style="
+                    background: #2196f3;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                ">
+                    <i class="fas fa-download"></i> Экспорт статистики
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Закрытие по клику на фон
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+// Получить HTML истории посещений
+function getVisitHistoryHTML() {
+    const history = JSON.parse(localStorage.getItem('visitHistory') || '[]');
+    
+    if (history.length === 0) {
+        return '<div style="color: #999; text-align: center; padding: 20px;">Нет данных</div>';
+    }
+    
+    // Берем последние 10 посещений
+    const lastVisits = history.slice(-10).reverse();
+    
+    return lastVisits.map(visit => {
+        const date = new Date(visit.timestamp);
+        return `
+            <div style="
+                padding: 8px 10px;
+                margin: 5px 0;
+                background: #f8f9fa;
+                border-radius: 5px;
+                border-left: 3px solid #2196f3;
+                display: flex;
+                justify-content: space-between;
+            ">
+                <div>
+                    <i class="far fa-clock"></i>
+                    ${date.toLocaleDateString('ru-RU')} ${date.toLocaleTimeString('ru-RU').slice(0,5)}
+                </div>
+                <div style="color: #666; font-size: 10px;">
+                    ID: ${visit.id ? visit.id.substring(0, 8) + '...' : 'неизвестно'}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Экспорт статистики
+function exportStats() {
+    const stats = {
+        uniqueVisitors: localStorage.getItem('uniqueVisitors'),
+        totalVisits: localStorage.getItem('totalVisits'),
+        todayStats: JSON.parse(localStorage.getItem('todayStats') || '{}'),
+        usedKeys: JSON.parse(localStorage.getItem('usedKeys') || '[]'),
+        visitHistory: JSON.parse(localStorage.getItem('visitHistory') || '[]'),
+        exportDate: new Date().toISOString()
+    };
+    
+    // Создаем JSON файл для скачивания
+    const dataStr = JSON.stringify(stats, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `uchebana5_stats_${new Date().toISOString().split('T')[0]}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    alert('Статистика экспортирована в JSON файл!');
+}
+
+// Инициализация статистики при загрузке
+document.addEventListener('DOMContentLoaded', () => {
+    // Записываем посещение с задержкой чтобы не мешать основной загрузке
+    setTimeout(() => {
+        recordVisit();
+        showVisitorCounter();
+    }, 2000);
+});
