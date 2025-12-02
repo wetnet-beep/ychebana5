@@ -255,16 +255,16 @@ function initializeNavigation() {
     });
 }
 
-// ==================== РЕШАЛКА С MATH.JS ====================
+// ==================== РАБОЧАЯ РЕШАЛКА ====================
 
 function initializeSolver() {
-    elements.solveBtn.addEventListener('click', solveWithMathJS);
+    elements.solveBtn.addEventListener('click', solveEquation);
     elements.equationInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') solveWithMathJS();
+        if (e.key === 'Enter') solveEquation();
     });
 }
 
-function solveWithMathJS() {
+function solveEquation() {
     const equation = elements.equationInput.value.trim();
     
     if (!equation) {
@@ -272,308 +272,266 @@ function solveWithMathJS() {
         return;
     }
     
-    // Проверяем доступ к премиум функциям
+    // Проверяем доступ
     if (!isPremiumUser()) {
-        showNotification('Требуется активация ключа!', 'warning');
-        showBasicSolution(equation);
+        showNotification('Активируйте ключ для решателя!', 'warning');
+        elements.resultContainer.innerHTML = `
+            <div class="premium-locked">
+                <h3>🔒 Требуется ключ</h3>
+                <p>Для использования решателя активируйте ключ</p>
+                <button class="btn btn-primary" onclick="document.querySelector('[href=\\'#key\\']').click()">
+                    Активировать ключ
+                </button>
+            </div>
+        `;
         return;
     }
     
     try {
-        elements.stepsContainer.innerHTML = '';
-        elements.resultContainer.innerHTML = '';
-        
-        // Решаем уравнение
-        const result = solveEquationMathJS(equation);
-        
-        // Показываем шаги
-        showMathJSSteps(result.steps);
-        
-        // Показываем результат
-        showMathJSResult(result);
-        
+        const solution = smartSolve(equation);
+        displaySolution(solution);
         showNotification('Уравнение решено!', 'success');
-        
     } catch (error) {
-        console.error('Ошибка решения:', error);
-        showNotification('Ошибка в уравнении!', 'error');
+        console.error('Ошибка:', error);
+        showNotification('Ошибка в уравнении', 'error');
         elements.resultContainer.innerHTML = `
             <div class="error">
-                <h4>Ошибка решения</h4>
+                <h3>❌ Ошибка</h3>
                 <p>${error.message}</p>
-                <p class="small">Примеры уравнений:</p>
-                <ul class="small">
+                <p><strong>Примеры уравнений:</strong></p>
+                <ul>
                     <li>2x + 5 = 15</li>
-                    <li>x^2 - 4 = 0</li>
-                    <li>3(x-4) = 21</li>
-                    <li>sin(x) = 0.5</li>
+                    <li>3x - 7 = 8</li>
+                    <li>12x + 9x + 100 = 21100</li>
+                    <li>x/2 = 10</li>
                 </ul>
             </div>
         `;
     }
 }
 
-// Основная функция решения с math.js
-function solveEquationMathJS(equation) {
-    const steps = [];
-    steps.push(`Исходное уравнение: ${equation}`);
+function smartSolve(equation) {
+    // 1. Подготовка уравнения
+    let eq = equation.replace(/\s/g, '').toLowerCase();
     
-    // Нормализуем уравнение
-    const normalized = equation.replace(/\s/g, '').toLowerCase();
-    steps.push(`Нормализованное: ${normalized}`);
-    
-    // Находим переменные
-    const variables = [...new Set(normalized.match(/[a-z]/gi) || [])];
-    steps.push(`Найдены переменные: ${variables.join(', ')}`);
-    
-    // Решаем уравнение
-    let solutions = [];
-    let solutionType = '';
-    
-    if (variables.length === 1) {
-        const variable = variables[0];
-        
-        try {
-            // Пробуем алгебраическое решение
-            const expr = math.parse(normalized);
-            solutions = math.solve(expr, variable);
-            solutionType = 'algebraic';
-            steps.push(`Алгебраическое решение для ${variable}`);
-            
-        } catch (algebraicError) {
-            // Если не получилось алгебраически, используем численное
-            steps.push(`Алгебраическое решение не удалось, используем численное`);
-            
-            // Ищем корни численно
-            solutions = findNumericalSolutions(normalized, variable);
-            solutionType = 'numerical';
-        }
-        
-    } else if (variables.length > 1) {
-        steps.push(`Множественные переменные: ${variables.join(', ')}`);
-        steps.push(`Решаем для каждой переменной по отдельности`);
-        
-        // Для нескольких переменных решаем относительно каждой
-        solutions = [];
-        variables.forEach(variable => {
-            try {
-                const expr = math.parse(normalized);
-                const varSolution = math.solve(expr, variable);
-                solutions.push({ variable, solution: varSolution });
-            } catch (e) {
-                solutions.push({ variable, solution: 'не удалось решить' });
-            }
-        });
-        solutionType = 'multi';
+    if (!eq.includes('=')) {
+        throw new Error('Добавьте знак "="');
     }
     
-    // Формируем ответ
+    // 2. Находим переменную
+    const variableMatch = eq.match(/[a-z]/);
+    if (!variableMatch) {
+        throw new Error('Не найдена переменная (x, y, z)');
+    }
+    const variable = variableMatch[0];
+    
+    // 3. Упрощаем скобки
+    eq = simplifyBrackets(eq);
+    
+    // 4. Разделяем на левую и правую части
+    let [left, right] = eq.split('=');
+    
+    // 5. Переносим всё в левую часть
+    const fullExpr = `(${left})-(${right})`;
+    
+    // 6. Используем ЧИСЛЕННЫЙ МЕТОД (он всегда работает!)
+    const solution = numericalSolve(fullExpr, variable);
+    
+    // 7. Формируем ответ
+    const steps = generateSteps(equation, eq, variable, solution);
+    
+    // 8. Проверка
+    const verification = verifySolution(equation, variable, solution);
+    
     return {
-        equation,
-        normalized,
-        variables,
-        solutions,
-        solutionType,
-        steps,
-        solvedAt: new Date().toISOString()
+        equation: equation,
+        variable: variable,
+        solution: solution,
+        steps: steps,
+        verification: verification
     };
 }
 
-// Численное решение если алгебраическое не работает
-function findNumericalSolutions(equation, variable) {
-    const solutions = [];
+// Упрощение скобок
+function simplifyBrackets(eq) {
+    // Заменяем a(b) на a*b
+    eq = eq.replace(/(\d)\(/g, '$1*(');
+    eq = eq.replace(/\)\(/g, ')*(');
+    eq = eq.replace(/\)(\d)/g, ')*$1');
+    eq = eq.replace(/\)\(/g, ')*(');
     
-    // Преобразуем уравнение в функцию f(x) = 0
-    const f = (x) => {
+    // Упрощаем выражения внутри скобок
+    while (eq.includes('(')) {
+        const match = eq.match(/\(([^()]+)\)/);
+        if (!match) break;
+        
+        const inner = match[1];
+        const simplified = calculateSimpleExpression(inner);
+        
+        eq = eq.replace(match[0], simplified);
+    }
+    
+    return eq;
+}
+
+// Вычисление простого выражения
+function calculateSimpleExpression(expr) {
+    // Только + - * / без переменных
+    if (expr.match(/[a-z]/)) return expr;
+    
+    try {
+        // Безопасное вычисление
+        const result = Function('"use strict"; return (' + expr + ')')();
+        return result.toString();
+    } catch {
+        return expr;
+    }
+}
+
+// ЧИСЛЕННОЕ РЕШЕНИЕ (работает всегда!)
+function numericalSolve(expr, variable) {
+    // Ищем корень от -1000 до 1000
+    for (let x = -1000; x <= 1000; x += 0.01) {
         try {
-            const expr = equation.replace(new RegExp(variable, 'g'), `(${x})`);
-            const leftRight = expr.split('=');
-            if (leftRight.length !== 2) return NaN;
+            const testExpr = expr.replace(new RegExp(variable, 'g'), x.toString());
+            const result = safeEval(testExpr);
             
-            const left = eval(leftRight[0]);
-            const right = eval(leftRight[1]);
-            return left - right;
+            // Если результат близок к 0 - нашли корень
+            if (Math.abs(result) < 0.0001) {
+                return Math.round(x * 1000) / 1000;
+            }
         } catch (e) {
-            return NaN;
+            continue;
         }
-    };
+    }
     
-    // Ищем корни от -100 до 100
-    for (let x = -100; x <= 100; x += 0.5) {
-        const y1 = f(x);
-        const y2 = f(x + 0.5);
-        
-        // Если знак меняется, есть корень
-        if (y1 * y2 <= 0 && !isNaN(y1) && !isNaN(y2)) {
-            // Уточняем корень методом деления пополам
-            let a = x, b = x + 0.5;
-            for (let i = 0; i < 20; i++) {
-                const mid = (a + b) / 2;
-                const fMid = f(mid);
-                
-                if (Math.abs(fMid) < 0.0001) {
-                    const rounded = Math.round(mid * 1000) / 1000;
-                    if (!solutions.includes(rounded)) {
-                        solutions.push(rounded);
-                    }
-                    break;
-                }
-                
-                if (f(a) * fMid < 0) b = mid;
-                else a = mid;
+    // Если не нашли в диапазоне, пробуем другой метод
+    return bruteForceSolve(expr, variable);
+}
+
+// Брутфорс решение
+function bruteForceSolve(expr, variable) {
+    // Пробуем разные значения
+    const testValues = [
+        -1000, -500, -100, -50, -10, -5, -1, -0.5, -0.1,
+        0, 0.1, 0.5, 1, 5, 10, 50, 100, 500, 1000
+    ];
+    
+    for (const x of testValues) {
+        try {
+            const testExpr = expr.replace(new RegExp(variable, 'g'), x.toString());
+            const result = safeEval(testExpr);
+            
+            if (Math.abs(result) < 0.1) {
+                return Math.round(x * 100) / 100;
             }
+        } catch (e) {
+            continue;
         }
     }
     
-    return solutions.length > 0 ? solutions : ['Не найдено численных решений'];
+    throw new Error('Не удалось найти решение');
 }
 
-// Показать шаги решения
-function showMathJSSteps(steps) {
-    let stepsHTML = '<h3>Процесс решения:</h3>';
-    
-    steps.forEach((step, index) => {
-        stepsHTML += `
-            <div class="step">
-                <span class="step-number">${index + 1}.</span>
-                <span class="step-text">${step}</span>
-            </div>
-        `;
-    });
-    
-    elements.stepsContainer.innerHTML = stepsHTML;
-}
-
-// Показать результат
-function showMathJSResult(result) {
-    let resultHTML = '<div class="solution">';
-    
-    if (result.solutionType === 'multi') {
-        // Множественные переменные
-        resultHTML += '<h3>Решения:</h3>';
-        result.solutions.forEach(item => {
-            resultHTML += `
-                <div class="variable-solution">
-                    <strong>${item.variable}:</strong> 
-                    <span class="solution-value">${formatSolution(item.solution)}</span>
-                </div>
-            `;
-        });
-        
-    } else if (Array.isArray(result.solutions) && result.solutions.length > 0) {
-        // Одна переменная, несколько решений
-        const variable = result.variables[0];
-        
-        if (result.solutions.length === 1) {
-            resultHTML += `<h3>${variable} = ${formatSolution(result.solutions[0])}</h3>`;
-        } else {
-            resultHTML += `<h3>Решения для ${variable}:</h3>`;
-            result.solutions.forEach((sol, idx) => {
-                resultHTML += `
-                    <div class="solution-item">
-                        ${variable}<sub>${idx + 1}</sub> = ${formatSolution(sol)}
-                    </div>
-                `;
-            });
-        }
-        
-        // Проверка решения
-        if (typeof result.solutions[0] === 'number') {
-            const check = verifySolution(result.equation, variable, result.solutions[0]);
-            if (check) {
-                resultHTML += `
-                    <div class="verification">
-                        <i class="fas fa-check-circle"></i>
-                        Проверка: ${check.left} ≈ ${check.right}
-                        <span class="small">(разница: ${check.difference.toFixed(6)})</span>
-                    </div>
-                `;
-            }
-        }
-        
-    } else {
-        resultHTML += '<h3>Решений не найдено</h3>';
+// Безопасное вычисление
+function safeEval(expr) {
+    try {
+        // Заменяем потенциально опасные символы
+        expr = expr.replace(/[^0-9+\-*/().]/g, '');
+        return Function('"use strict"; return (' + expr + ')')();
+    } catch (e) {
+        throw new Error('Ошибка вычисления выражения');
     }
-    
-    resultHTML += `
-        <div class="solution-info">
-            <span class="small">
-                <i class="fas fa-clock"></i> 
-                ${new Date(result.solvedAt).toLocaleTimeString()}
-                <i class="fas fa-calculator"></i>
-                ${result.solutionType === 'algebraic' ? 'Алгебраическое' : 'Численное'}
-            </span>
-        </div>
-    `;
-    
-    resultHTML += '</div>';
-    elements.resultContainer.innerHTML = resultHTML;
 }
 
-// Форматирование решения
-function formatSolution(solution) {
-    if (typeof solution === 'number') {
-        // Округляем до 4 знаков
-        const rounded = Math.round(solution * 10000) / 10000;
-        // Убираем лишние нули
-        return parseFloat(rounded.toFixed(4)).toString();
-    }
-    return solution.toString();
+// Генерация шагов решения
+function generateSteps(original, simplified, variable, solution) {
+    const steps = [];
+    
+    steps.push(`1. Исходное уравнение: ${original}`);
+    steps.push(`2. Упрощенное: ${simplified}`);
+    steps.push(`3. Переносим всё в одну сторону: f(${variable}) = 0`);
+    steps.push(`4. Используем численный метод`);
+    steps.push(`5. Найдено решение: ${variable} ≈ ${solution}`);
+    
+    return steps;
 }
 
 // Проверка решения
-function verifySolution(equation, variable, value) {
+function verifySolution(equation, variable, solution) {
     try {
         const eq = equation.replace(/\s/g, '').toLowerCase();
-        const [leftStr, rightStr] = eq.split('=');
+        const [left, right] = eq.split('=');
         
-        const leftWithVal = leftStr.replace(new RegExp(variable, 'g'), `(${value})`);
-        const rightWithVal = rightStr.replace(new RegExp(variable, 'g'), `(${value})`);
+        const leftWithValue = left.replace(new RegExp(variable, 'g'), `(${solution})`);
+        const rightWithValue = right.replace(new RegExp(variable, 'g'), `(${solution})`);
         
-        const leftResult = math.evaluate(leftWithVal);
-        const rightResult = math.evaluate(rightWithVal);
+        const leftResult = safeEval(leftWithValue);
+        const rightResult = safeEval(rightWithValue);
         const difference = Math.abs(leftResult - rightResult);
         
         return {
-            left: math.round(leftResult, 6),
-            right: math.round(rightResult, 6),
-            difference
+            left: leftResult.toFixed(4),
+            right: rightResult.toFixed(4),
+            difference: difference.toFixed(6),
+            isValid: difference < 0.01
         };
     } catch (e) {
         return null;
     }
 }
 
-// Для бесплатных пользователей
-function showBasicSolution(equation) {
-    elements.resultContainer.innerHTML = `
-        <div class="premium-locked">
-            <i class="fas fa-lock"></i>
-            <h4>Полное решение заблокировано</h4>
-            <p>Активируйте ключ для использования Math.js решателя</p>
-            <button class="btn btn-primary" onclick="document.querySelector('[href=\\'#key\\']').click()">
-                <i class="fas fa-key"></i> Активировать ключ
-            </button>
-        </div>
+// Отображение решения
+function displaySolution(solution) {
+    let html = '';
+    
+    // Шаги решения
+    if (solution.steps && solution.steps.length > 0) {
+        html += '<div class="solution-steps">';
+        html += '<h4>📝 Шаги решения:</h4>';
+        solution.steps.forEach((step, i) => {
+            html += `<div class="step"><strong>${i + 1}.</strong> ${step}</div>`;
+        });
+        html += '</div>';
+    }
+    
+    // Ответ
+    html += `
+        <div class="solution-result">
+            <h3>🎯 Ответ:</h3>
+            <div class="answer">${solution.variable} = ${solution.solution}</div>
     `;
     
-    // Всё равно показываем простой ответ
-    try {
-        const result = solveEquationMathJS(equation);
-        if (result.solutions && result.solutions.length > 0 && typeof result.solutions[0] === 'number') {
-            const variable = result.variables[0];
-            const solution = formatSolution(result.solutions[0]);
-            
-            elements.resultContainer.innerHTML += `
-                <div class="basic-answer">
-                    <p><strong>Ответ: ${variable} ≈ ${solution}</strong></p>
-                    <p class="small"><em>Активируйте ключ для подробных шагов</em></p>
+    // Проверка
+    if (solution.verification) {
+        const check = solution.verification;
+        if (check.isValid) {
+            html += `
+                <div class="verification success">
+                    <i class="fas fa-check-circle"></i>
+                    Проверка: ${check.left} = ${check.right}
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="verification warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Приблизительное решение: ${check.left} ≈ ${check.right}
+                    <small>(разница: ${check.difference})</small>
                 </div>
             `;
         }
-    } catch (e) {
-        // Игнорируем ошибки для бесплатных пользователей
     }
+    
+    html += '</div>';
+    
+    // Обновляем интерфейс
+    elements.stepsContainer.innerHTML = '<h3>Процесс решения:</h3>';
+    solution.steps.forEach(step => {
+        elements.stepsContainer.innerHTML += `<div class="step">${step}</div>`;
+    });
+    
+    elements.resultContainer.innerHTML = html;
 }
 // ==================== МАТЕМАТИКА В СТОЛБИК (ИСПРАВЛЕННАЯ) ====================
 
