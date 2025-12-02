@@ -883,6 +883,86 @@ body {
 
 .dark-theme .variable-solution {
     background: rgba(76, 175, 80, 0.15);
+    /* Стили для решателя */
+.solution-steps {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-left: 5px solid #2196f3;
+}
+
+.step {
+    padding: 10px 15px;
+    margin: 8px 0;
+    background: white;
+    border-radius: 6px;
+    border-left: 3px solid #4caf50;
+}
+
+.solution-result {
+    background: #e8f5e9;
+    border-radius: 10px;
+    padding: 25px;
+    text-align: center;
+    border: 2px solid #4caf50;
+}
+
+.answer {
+    font-size: 32px;
+    font-weight: bold;
+    color: #2e7d32;
+    margin: 15px 0;
+}
+
+.verification {
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 15px;
+    font-size: 16px;
+}
+
+.verification.success {
+    background: rgba(76, 175, 80, 0.2);
+    color: #2e7d32;
+    border: 1px solid #4caf50;
+}
+
+.verification.warning {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ff8f00;
+    border: 1px solid #ffc107;
+}
+
+.premium-locked {
+    text-align: center;
+    padding: 40px;
+    background: #fff3e0;
+    border-radius: 15px;
+    border: 2px dashed #ff9800;
+}
+
+.premium-locked h3 {
+    color: #ff9800;
+    margin-bottom: 15px;
+}
+
+.error {
+    background: #ffebee;
+    border: 2px solid #f44336;
+    border-radius: 10px;
+    padding: 20px;
+    color: #c62828;
+}
+
+.error ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.error li {
+    margin: 5px 0;
+}
 }
 
 .dark-theme .solution-item {
