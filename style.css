@@ -797,3 +797,94 @@ body {
     margin: 10px 0;
     border-left: 4px solid #2196f3;
 }
+/* Стили для Math.js решателя */
+.step {
+    padding: 10px 15px;
+    margin: 8px 0;
+    background: rgba(33, 150, 243, 0.08);
+    border-radius: 6px;
+    border-left: 4px solid #2196f3;
+    display: flex;
+    align-items: flex-start;
+}
+
+.step-number {
+    background: #2196f3;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+    flex-shrink: 0;
+    font-size: 12px;
+}
+
+.step-text {
+    flex: 1;
+    line-height: 1.5;
+}
+
+.variable-solution {
+    padding: 10px 15px;
+    margin: 5px 0;
+    background: rgba(76, 175, 80, 0.1);
+    border-radius: 6px;
+    border-left: 3px solid #4caf50;
+}
+
+.solution-item {
+    padding: 8px 12px;
+    margin: 4px 0;
+    background: rgba(255, 193, 7, 0.1);
+    border-radius: 5px;
+    border-left: 3px solid #ffc107;
+}
+
+.solution-value {
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: bold;
+    color: #2196f3;
+}
+
+.verification {
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(76, 175, 80, 0.1);
+    border-radius: 6px;
+    border: 1px solid #4caf50;
+    font-size: 14px;
+}
+
+.verification i {
+    color: #4caf50;
+    margin-right: 8px;
+}
+
+.solution-info {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-color);
+    opacity: 0.7;
+    font-size: 12px;
+}
+
+.solution-info i {
+    margin: 0 5px;
+}
+
+.dark-theme .step {
+    background: rgba(33, 150, 243, 0.15);
+}
+
+.dark-theme .variable-solution {
+    background: rgba(76, 175, 80, 0.15);
+}
+
+.dark-theme .solution-item {
+    background: rgba(255, 193, 7, 0.15);
+}
