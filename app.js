@@ -1,3 +1,33 @@
+// === САМЫЕ ПЕРВЫЕ СТРОКИ В app.js ===
+// ЖЁСТКОЕ ОТКЛЮЧЕНИЕ SERVICE WORKER
+if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+    console.log('🔒 Жесткое отключение Service Worker');
+    
+    // 1. Отписываемся от всех существующих
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        registrations.forEach(function(registration) {
+            console.log('Удаляем SW:', registration.scope);
+            registration.unregister().then(function(success) {
+                console.log(success ? '✅ Успешно' : '❌ Не удалось');
+            });
+        });
+    });
+    
+    // 2. Блокируем ВСЕ будущие регистрации
+    navigator.serviceWorker.register = function() {
+        console.log('❌ Регистрация Service Worker заблокирована');
+        return Promise.reject(new Error('Service Worker отключен администратором'));
+    };
+    
+    // 3. Отключаем контроллер если есть
+    if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({type: 'TERMINATE'});
+    }
+}
+
+// ТОЛЬКО ПОСЛЕ ЭТОГО ТВОЙ ОСТАЛЬНОЙ КОД
+let currentUser = null;
+// ... и так далее
 // app.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
 
 // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
